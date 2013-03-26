@@ -14,7 +14,7 @@
 
 /*
  * A handy alias for return types from functions.  Don't bother
- * specifying deleter type for unique_ptr.
+ * specifying deleter type for std::unique_ptr any more.
  */
 template<class T>
 using scoped_ptr = std::unique_ptr<T, std::function<void (T *const)>>;
@@ -63,14 +63,14 @@ read_x509 (const std::string& path)
  * of certificates.
  */
 scoped_ptr<STACK_OF(X509)>
-read_untrusted (char const *const *begin, char const *const *end)
+read_untrusted (char const *const *const begin, char const *const *const end)
 {
   scoped_ptr<STACK_OF(X509)> untrusted_certs =
     make_scoped (
       sk_X509_new_null (),
       [](STACK_OF(X509)* const s) { sk_X509_pop_free (s, X509_free); });
 
-  std::for_each (begin, end, [&untrusted_certs] (char const *path) {
+  std::for_each (begin, end, [&untrusted_certs] (char const *const path) {
       if (!sk_X509_push (untrusted_certs.get (), read_x509_raw (path))) {
 	throw
 	  std::runtime_error ("Cannot add untrusted certificate into the stack");
@@ -104,7 +104,7 @@ print_verification_failure_msg (X509_STORE_CTX *const ctx, std::ostream& out)
     throw std::runtime_error ("Cannot allocate buffer for the error message");
   }
 
-  // Maybe we can find out something about the culprit certificate...
+  // Maybe we can find out something about the culprit...
   X509* const cert = X509_STORE_CTX_get_current_cert (ctx);
   // It is possible that the cert is deliberately set to NULL and the error
   // is not related to any specific certificate.
@@ -115,7 +115,7 @@ print_verification_failure_msg (X509_STORE_CTX *const ctx, std::ostream& out)
     }
 
     if (X509_NAME_print_ex (bio.get (), subj, 0, XN_FLAG_ONELINE) <= 0) {
-      throw std::runtime_error ("Cannot get certificate subject name");
+      throw std::runtime_error ("Cannot print certificate subject name");
     }
   }
 
@@ -123,8 +123,8 @@ print_verification_failure_msg (X509_STORE_CTX *const ctx, std::ostream& out)
   { 
   case X509_V_ERR_CERT_NOT_YET_VALID:
   case X509_V_ERR_CERT_HAS_EXPIRED:
-    // If it's somthing to do with certificate validity dates (one of the most
-    // common failure reasons), lets try to find out something more about them.
+    // If it's something to do with certificate validity dates (one of the most
+    // common failure reasons), let's try to find out something more about them.
     if (BIO_puts (bio.get (),"\nnotBefore: ") <= 0 ||
 	ASN1_TIME_print (bio.get (), X509_get_notBefore (cert)) <= 0 ||
 	BIO_puts (bio.get (),"\nnotAfter: ") <= 0 ||
@@ -135,11 +135,11 @@ print_verification_failure_msg (X509_STORE_CTX *const ctx, std::ostream& out)
     break;
   }
 
-  // Now let's extract all we've collected in our BIO object
+  // Now let's extract everything we've collected in our BIO object
   char* buffer;
   const long buffer_length = BIO_get_mem_data (bio.get (), &buffer);
   if (buffer_length < 0) {
-    throw std::runtime_error ("Cannot get error message buffer");
+    throw std::runtime_error ("Cannot get error message buffer content");
   }
 
   // And it's also worth to know at what certificate level the verification failed.
@@ -162,7 +162,7 @@ usage (char const *const arg0, std::ostream& out)
 "\n"
 "Verifies <leaf cert> with all optional intermediate <untrusted cert>s and\n"
 "ultimately trusted root <CA cert>.  Please note that the order of certificates\n"
-"on the command line is important.\n"
+"on the command line is important: root - optional intermediates - leaf.\n"
       << std::endl;
 }
 
@@ -198,7 +198,7 @@ main (int argc, char* argv[])
       throw std::runtime_error ("Cannot create a trusted store");
     }
 
-    // The lookup method is owned by the store
+    // The lookup method is owned by the store once created and added to the store
     const auto lookup = X509_STORE_add_lookup (trusted.get (), X509_LOOKUP_file ());
     if (!lookup) {
       throw std::runtime_error ("Cannot add file lookup");
