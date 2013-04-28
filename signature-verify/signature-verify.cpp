@@ -65,6 +65,9 @@ read_file (const std::string& path)
   }
 
   return std::vector<byte_t> (
+    // ok, we don't want to run into issues with locale
+    // so using char rather than byte_t and deferring conversion to
+    // vector construction
     std::istreambuf_iterator<char> (in), std::istreambuf_iterator<char> ());
 }
 
@@ -103,7 +106,7 @@ main (int argc, char* argv[])
   }
 
   // This has to be called before the verification where a number of cryptographic
-  // algorithms is used (they are not available by default).
+  // algorithms is used (they might not be available by default).
   OpenSSL_add_all_algorithms ();
 
   try {
@@ -121,7 +124,7 @@ main (int argc, char* argv[])
 
     // initialize the MD context with SHA1 algorithm (the choice of the
     // algorithm should be more flexible in most real cases)
-    if (!EVP_VerifyInit (ctx.get (), EVP_sha1 ())) {
+    if (!EVP_VerifyInit_ex (ctx.get (), EVP_sha1 (), nullptr)) {
       throw std::runtime_error("Cannot initialize verification");
     }
 

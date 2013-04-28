@@ -18,44 +18,59 @@ executable="$1"
 	exit 1
 }
 
+# scratch directory
 tmpdir=$(mktemp -d)
 
-pass=none
+# Don't care about the password as this is all fake material for testing
+pass="none"
+
+# private key
 key_priv="${tmpdir}/test-key-priv.pem"
+
+# associated certificate
 cert="${tmpdir}/test-cert.pem"
+
+# data to sign (and verify)
 data="${tmpdir}/data"
+
+# generated signature which is delivered for verification to the peer
 signature="${tmpdir}/signature"
 
-# generate private key and certificate with public key 
+##
+# generate private key and certificate with public key
+#
 openssl req -x509 -newkey rsa:2048 \
     -keyout "${key_priv}" -subj "/CN=FakeSigner" \
     -passout pass:"${pass}" -out "${cert}" &>/dev/null
 
-# generate data and signature
+##
+# generate data and sign it (generate the signature)
+#
 echo -n "test" | \
 tee "${data}" | \
 openssl dgst -sha1 -sign "${key_priv}" -passin pass:"${pass}" \
     -out "${signature}"
 
-let failed=0
-test_fail() {
-    local test=$1
-    echo "Test $test failed"
-    ((++failed))
-}
+###############
+#### tests ####
+###############
 
+##
 # test successful verification
-"${executable}" "${cert}" "${data}" "${signature}" | grep -q "OK" || \
-    test_fail "successful-verification"
+#
+echo -n "Expecting successful verification ... "
+"${executable}" "${cert}" "${data}" "${signature}"
 
+##
 # test tampered data verification
+#
 data_tampered="${data}.tampered"
 cp -a "${data}" "${data_tampered}"
 echo "whoa" >> "${data_tampered}"
-"${executable}" "${cert}" "${data_tampered}" "${signature}" |& grep -q "failed" || \
-    test_fail "tampered-verification"
+echo -n "Expecting verification failure ... "
+"${executable}" "${cert}" "${data_tampered}" "${signature}"
 
+##
+# remove the scratch directory
+#
 rm -rf "${tmpdir}"
-
-(($failed == 0)) && echo "All tests passed"
-exit $failed
